@@ -1,0 +1,4 @@
+# Keep LF line endings in every checkout, so the shell scripts also work when the repo is
+# cloned on Windows and run from WSL (CRLF breaks bash).
+* text=auto eol=lf
+*.pdf binary

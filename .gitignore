@@ -1,0 +1,17 @@
+# Real API key: never commit. Use secret.example.yaml as the template.
+secret.yaml
+
+# Image tag remembered between `make` runs when pushing to a registry
+.build-tag
+
+__pycache__/
+*.pyc
+
+# Fine-tuning: generated data, checkpoints and results
+finetune/data/
+finetune/out/
+finetune/results/
+.venv-finetune/
+
+# Which fine-tuned decision model `make up` should keep using (see scripts/use-checkpoint.sh)
+.laya-checkpoint

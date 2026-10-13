@@ -1,0 +1,248 @@
+# Synthetic requests for testing the policy gate (`make test-policy`). No real data: everything here is
+# invented. `expect` is what the gate SHOULD decide: allow (public model), local, or block.
+#
+# The set is deliberately mixed: plain safe requests, clear violations, paraphrased violations that
+# plain rules cannot see (the decision model's job), and "traps" that look risky but are fine.
+# The number that matters most is how many unsafe requests are wrongly allowed (misses).
+
+# ---------------------------------------------------------------- safe: should go to the public model
+
+[[cases]]
+text = "What is the National Electricity Market and how does it set prices?"
+expect = "allow"
+kind = "safe"
+
+[[cases]]
+text = "Explain what a lack of reserve notice means for generators."
+expect = "allow"
+kind = "safe"
+
+[[cases]]
+text = "How does a grid-scale battery earn revenue in the NEM?"
+expect = "allow"
+kind = "safe"
+
+[[cases]]
+text = "What is the difference between a firm and a flexible grid connection?"
+expect = "allow"
+kind = "safe"
+
+[[cases]]
+text = "Convert 72 degrees Fahrenheit to Celsius."
+expect = "allow"
+kind = "safe"
+
+[[cases]]
+text = "Write a short haiku about wind farms."
+expect = "allow"
+kind = "safe"
+
+[[cases]]
+text = "Summarise what a market price cap is and why it exists."
+expect = "allow"
+kind = "safe"
+
+[[cases]]
+text = "What are typical reasons a solar farm's output is curtailed?"
+expect = "allow"
+kind = "safe"
+
+# ---------------------------------------------------------------- traps: look risky, are fine
+
+[[cases]]
+text = "What is a password manager and should my team use one?"
+expect = "allow"
+kind = "trap"
+
+[[cases]]
+text = "Explain how OAuth access tokens work, in simple terms."
+expect = "allow"
+kind = "trap"
+
+[[cases]]
+text = "The password is required before you can log in. Can you rephrase that more politely?"
+expect = "allow"
+kind = "trap"
+
+[[cases]]
+text = "What are good project management practices for a construction project?"
+expect = "allow"
+kind = "trap"
+
+[[cases]]
+text = "Which kinds of customers benefit most from demand response programs?"
+expect = "allow"
+kind = "trap"
+
+# ---------------------------------------------------------------- credentials: should be blocked
+
+[[cases]]
+text = "My key is sk-ant-api03-AbCdEf1234567890xyzAbCdEf why does the call fail?"
+expect = "block"
+kind = "credentials"
+
+[[cases]]
+text = "Here is the config: password: Spring2026!x for the reporting server, can you tidy it up?"
+expect = "block"
+kind = "credentials"
+
+[[cases]]
+text = "-----BEGIN RSA PRIVATE KEY----- MIIEowIBAAKCAQEA7 -----END RSA PRIVATE KEY----- is this format valid?"
+expect = "block"
+kind = "credentials"
+
+[[cases]]
+text = "Why can't I connect with postgres://admin:S3cretPass@db.internal:5432/prod ?"
+expect = "block"
+kind = "credentials"
+
+[[cases]]
+text = "I'll paste the token: ghp_1234567890abcdefghijABCDEFGHIJ123456 and you tell me what scopes it needs."
+expect = "block"
+kind = "credentials"
+
+# ---------------------------------------------------------------- customer / commercial: local (names the rules know)
+
+[[cases]]
+text = "Draft a reply to Acme Renewables accepting their revised price of $82/MWh for the five-year PPA, but asking for a 3% escalator."
+expect = "local"
+kind = "customer"
+
+[[cases]]
+text = "Northgate Power asked for a 10% discount on the connection agreement. List arguments for refusing."
+expect = "local"
+kind = "customer"
+
+# ---------------------------------------------------------------- customer / commercial: local (paraphrased: needs the model)
+
+[[cases]]
+text = "A data centre client we are negotiating with wants a lower tariff than we offered. Summarise our negotiating position and the concessions we could make."
+expect = "local"
+kind = "customer-paraphrased"
+
+[[cases]]
+text = "The developer on the Hunter site rejected our connection fee in the last call; help me plan the counter-offer and what we can give up."
+expect = "local"
+kind = "customer-paraphrased"
+
+# ---------------------------------------------------------------- unannounced projects: local (names the rules know)
+
+[[cases]]
+text = "Project Kestrel is a 400 MW battery at the Mt Piper substation with financial close in March. Write an internal announcement."
+expect = "local"
+kind = "project"
+
+[[cases]]
+text = "Draft a board paper on Project Wren: capacity, land costs and expected energisation date."
+expect = "local"
+kind = "project"
+
+# ---------------------------------------------------------------- unannounced projects: local (paraphrased)
+
+[[cases]]
+text = "We are quietly buying land near the Tamworth substation for a 300 MW battery that has not been announced. Draft the board paper."
+expect = "local"
+kind = "project-paraphrased"
+
+[[cases]]
+text = "Our unannounced acquisition of the two solar farms in the Riverina is closing next quarter; outline the communications plan."
+expect = "local"
+kind = "project-paraphrased"
+
+# ---------------------------------------------------------------- trading / market-sensitive: local (all need the model)
+
+[[cases]]
+text = "Our bids for tomorrow's evening peak in South Australia will be offered at $300/MWh for 80 MW. Is that a smart strategy?"
+expect = "local"
+kind = "market"
+
+[[cases]]
+text = "We are long 200 MW of Q1 NSW base futures and plan to unwind next week. Analyse the risk of doing that."
+expect = "local"
+kind = "market"
+
+[[cases]]
+text = "Our internal price forecast for Victoria next month is $140/MWh, well above the market. How should we position the battery?"
+expect = "local"
+kind = "market"
+
+# ---------------------------------------------------------------- market-sensitive: the independent set
+# Written separately from the fine-tuning templates in finetune/make_dataset.py, in different styles
+# (chatty, terse, indirect). Run `python finetune/check_leakage.py` to see how close any case is to the
+# training data. "market-holdout" cases should go local; "market-trap" cases sound similar but are
+# public knowledge or general education, and should be allowed.
+
+[[cases]]
+text = "Between us: we're holding the Ridgeway battery back until the 6pm spike, then offering the lot at the price cap."
+expect = "local"
+kind = "market-holdout"
+
+[[cases]]
+text = "Our desk is positioned for a Q3 heatwave, with 150 MW of caps bought at a $400 strike. How would you size the next tranche?"
+expect = "local"
+kind = "market-holdout"
+
+[[cases]]
+text = "Trader notes: our stack for the 5:30pm interval is 40 MW at $55, 60 MW at $190 and the rest at the cap. Critique it."
+expect = "local"
+kind = "market-holdout"
+
+[[cases]]
+text = "Finance wants our unpublished Q4 spot view of $118 average for NSW in the hedging memo. Write it up."
+expect = "local"
+kind = "market-holdout"
+
+[[cases]]
+text = "We plan to rebid our wind output to the floor right before the evening ramp. Walk me through the likely effect on prices."
+expect = "local"
+kind = "market-holdout"
+
+[[cases]]
+text = "Can you stress-test our swap book? We are net short 300 GWh of Victorian baseload and the board does not know yet."
+expect = "local"
+kind = "market-holdout"
+
+[[cases]]
+text = "Our forecast says hub gas will jump 30% next week, before anything is published. How should the retail arm hedge?"
+expect = "local"
+kind = "market-holdout"
+
+[[cases]]
+text = "Summarise tomorrow's dispatch offers by unit for the CEO: we have put Unit 2 at $14,500 for its top 20 MW."
+expect = "local"
+kind = "market-holdout"
+
+[[cases]]
+text = "We will be out of the market for a two-hour outage next Tuesday that has not been notified. Where do prices go?"
+expect = "local"
+kind = "market-holdout"
+
+[[cases]]
+text = "What was the average spot price in South Australia last quarter?"
+expect = "allow"
+kind = "market-trap"
+
+[[cases]]
+text = "Explain how a cap contract pays out when the spot price goes above the strike."
+expect = "allow"
+kind = "market-trap"
+
+[[cases]]
+text = "What does it mean to be net short in a futures market?"
+expect = "allow"
+kind = "market-trap"
+
+[[cases]]
+text = "Write a one-paragraph explainer on how bid stacks set the clearing price."
+expect = "allow"
+kind = "market-trap"
+
+[[cases]]
+text = "Summarise the public AEMO price forecast and how it differs from last week's."
+expect = "allow"
+kind = "market-trap"
+
+[[cases]]
+text = "Help me build a spreadsheet that tracks a made-up portfolio of hedge contracts, for a training exercise."
+expect = "allow"
+kind = "market-trap"

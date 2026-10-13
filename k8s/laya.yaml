@@ -1,0 +1,68 @@
+# The decision model behind the policy gate (Laya, run by laya/server.py). It reads a request and answers
+# one yes/no question per policy, on the CPU. The model weights (a few hundred MB) are downloaded from
+# Hugging Face on first start and kept on a volume, so restarts do not download them again.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: laya-cache
+  namespace: agentic-decision
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: laya
+  namespace: agentic-decision
+spec:
+  replicas: 1
+  progressDeadlineSeconds: 1800  # the first start downloads the weights
+  strategy:
+    type: Recreate  # single RWO volume
+  selector:
+    matchLabels: {app: laya}
+  template:
+    metadata:
+      labels: {app: laya}
+    spec:
+      containers:
+        - name: laya
+          image: agentic-decision/laya:dev
+          ports:
+            - containerPort: 8000
+          env:
+            - name: HF_HOME  # where Hugging Face downloads the weights to
+              value: /cache
+            - name: LAYA_MODEL  # "english" (512-token window) or "multilingual" (1,024)
+              value: english
+            - name: LAYA_CHECKPOINT  # optional: a fine-tuned checkpoint folder (see docs/finetune/fine-tuning.md); empty = the stock model
+              value: ""
+          resources:
+            limits:
+              memory: 3Gi
+          volumeMounts:
+            - name: cache
+              mountPath: /cache
+          startupProbe:  # up to 15 minutes for the first download
+            httpGet: {path: /healthz, port: 8000}
+            periodSeconds: 10
+            failureThreshold: 90
+          readinessProbe:
+            httpGet: {path: /healthz, port: 8000}
+      volumes:
+        - name: cache
+          persistentVolumeClaim:
+            claimName: laya-cache
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: laya
+  namespace: agentic-decision
+spec:
+  selector: {app: laya}
+  ports:
+    - port: 8000

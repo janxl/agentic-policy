@@ -1,0 +1,117 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Agent with a policy gate</title>
+<style>
+  body { font-family: sans-serif; max-width: 700px; margin: 2rem auto; padding: 0 1rem; }
+  #banner { display: none; background: #fff4d6; border: 1px solid #e0b84c; padding: .4rem .6rem; margin-bottom: .5rem; font-size: .9rem; }
+  #log { border: 1px solid #ccc; height: 60vh; overflow-y: auto; padding: .5rem; white-space: pre-wrap; }
+  .user { color: #06c; margin: .5rem 0; }
+  .agent { margin: .5rem 0; }
+  .agent.blocked { color: #a00; }
+  .note { font-size: .8rem; margin: -.2rem 0 .6rem .5rem; padding: .15rem .4rem; border-left: 3px solid #bbb; color: #555; }
+  .note.local { border-color: #e0b84c; background: #fff9e6; color: #6b4e00; }
+  .note.blocked { border-color: #c33; background: #fdecec; color: #8a1f1f; }
+  form { display: flex; gap: .5rem; margin-top: .5rem; }
+  input { flex: 1; padding: .5rem; }
+</style>
+</head>
+<body>
+<div id="banner"></div>
+<div id="log"></div>
+<form id="f"><input id="m" autocomplete="off" autofocus><button>Send</button><button type="button" id="new">New chat</button></form>
+<script>
+// randomUUID is only available in secure contexts (https/localhost)
+function newId() {
+  return crypto.randomUUID
+    ? crypto.randomUUID()
+    : Math.random().toString(36).slice(2) + Date.now().toString(36);
+}
+// Keep the session id in the browser so a reload (or an agent restart) resumes the same chat.
+let sid;
+try { sid = localStorage.getItem('sid'); } catch (e) {}
+if (!sid) {
+  sid = newId();
+  try { localStorage.setItem('sid', sid); } catch (e) {}
+}
+const log = document.getElementById('log');
+const input = document.getElementById('m');
+const banner = document.getElementById('banner');
+function add(cls, text) {
+  const d = document.createElement('div');
+  d.className = cls; d.textContent = text;
+  log.appendChild(d); log.scrollTop = log.scrollHeight;
+  return d;
+}
+// A conversation that has contained restricted content stays on the local model; say so.
+function showRestriction(reason) {
+  banner.style.display = reason ? 'block' : 'none';
+  banner.textContent = reason
+    ? 'Local-only conversation (policy: ' + reason + '). Nothing here will be sent to the public model.'
+    : '';
+}
+// How the policy gate handled one request, in a line.
+function noteFor(r) {
+  if (!r) return null;
+  const hits = (r.policy.hits || []).map(h => h.title + ' (' + h.source + ', ' + h.score.toFixed(2) + ')').join('; ');
+  const matched = hits ? ' Matched: ' + hits + '.' : '';
+  if (r.route === 'blocked') return {cls: 'blocked', text: 'Blocked: not sent to any model.' + matched};
+  if (r.route === 'local') return {cls: 'local', text: (r.why || 'Used the local model.') + ' Answered by the local model (' + r.model + ').' + matched};
+  return {cls: 'public', text: 'Policy check passed (' + r.policy.engine + ', ' + r.policy.ms + ' ms). Sent to the public model (' + r.model + ').'};
+}
+// Restore the conversation stored on the server for this session.
+fetch('/history/' + encodeURIComponent(sid))
+  .then(r => r.ok ? r.json() : { messages: [] })
+  .then(h => {
+    h.messages.forEach(m => add(m.role === 'user' ? 'user' : 'agent',
+      (m.role === 'user' ? 'You: ' : 'Agent: ') + m.text));
+    showRestriction(h.restricted);
+  })
+  .catch(() => {});
+
+document.getElementById('new').onclick = () => {
+  sid = newId();
+  try { localStorage.setItem('sid', sid); } catch (e) {}
+  log.textContent = '';
+  showRestriction(null);
+  input.focus();
+};
+
+document.getElementById('f').onsubmit = async e => {
+  e.preventDefault();
+  const message = input.value.trim();
+  if (!message) return;
+  input.value = '';
+  add('user', 'You: ' + message);
+  const pending = add('agent', 'Checking policies...');
+  const t0 = Date.now();
+  const timer = setInterval(() => {
+    pending.textContent = 'Thinking... ' + Math.round((Date.now() - t0) / 1000) + 's';
+  }, 1000);
+  try {
+    const r = await fetch('/chat', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({session_id: sid, message})
+    });
+    if (!r.ok) {
+      const body = await r.json().catch(() => ({}));
+      throw new Error(body.detail || r.status);
+    }
+    const data = await r.json();
+    const secs = Math.round((Date.now() - t0) / 1000);
+    const blocked = data.routing && data.routing.route === 'blocked';
+    pending.className = 'agent' + (blocked ? ' blocked' : '');
+    pending.textContent = blocked ? data.reply : 'Agent (' + secs + 's): ' + data.reply;
+    const note = noteFor(data.routing);
+    if (note) add('note ' + note.cls, note.text);
+    if (data.routing) showRestriction(data.routing.restricted);
+  } catch (err) {
+    pending.textContent = 'Error: ' + err.message;
+  } finally {
+    clearInterval(timer);
+  }
+};
+</script>
+</body>
+</html>

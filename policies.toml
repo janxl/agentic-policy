@@ -1,0 +1,60 @@
+# Data-handling policies. Every request is checked against these BEFORE it can be sent to a public LLM.
+#
+# DEMO LIST: four illustrative policies for a trial, not a real organisation's policy. The names in
+# the watchlists are fictional.
+#
+# Each policy has an action:
+#   block  the request is not sent anywhere; the user is told why
+#   local  the request (and the rest of the conversation) goes to the local model instead of the public one
+#
+# A policy applies when either of these fires:
+#   rules   exact checks in plain code: `patterns` (regular expressions) and `watchlist` (names)
+#   model   the decision model's probability for `criterion` reaches `threshold`
+#
+# Published to the cluster as part of the `app-config` ConfigMap: `make config` applies it.
+
+[settings]
+threshold = 0.6            # default probability at which a model check counts as a hit
+on_engine_error = "local"  # if the decision model is unreachable or the text is too long to screen: "local" or "block"
+
+[[policies]]
+id = "credentials"
+title = "Credentials and secrets"
+action = "block"
+criterion = "The text contains a password, API key, access token, private key or other secret credential."
+message = "This looks like it contains a credential or secret, so it was not sent to any model. Remove it and try again."
+threshold = 0.8
+patterns = [
+  'sk-ant-[A-Za-z0-9_-]{10,}',
+  'sk-[A-Za-z0-9]{20,}',
+  'AKIA[0-9A-Z]{16}',
+  'gh[pousr]_[A-Za-z0-9]{20,}',
+  'xox[bpas]-[0-9A-Za-z-]{10,}',
+  '-----BEGIN [A-Z ]*PRIVATE KEY-----',
+  'Bearer\s+[A-Za-z0-9._~+/=-]{20,}',
+  '(?i)\b[a-z][a-z0-9+.-]*://[^\s/:@]+:[^\s/@]+@\S+',
+  '''(?i)\b(?:password|passwd|pwd|secret|api[_-]?key|access[_-]?token|auth[_-]?token)\b\s*(?:is|=|:)\s*["']?(?=\S*[0-9!@#$%^&*_-])\S{6,}''',
+]
+
+[[policies]]
+id = "customer-confidential"
+title = "Customer and commercial confidential"
+action = "local"
+criterion = "The text discusses a named customer or counterparty together with contract terms, pricing or negotiation."
+message = "This looks like customer or commercial-in-confidence information."
+watchlist = ["Acme Renewables", "Northgate Power", "Bluefin Data Centres"]
+
+[[policies]]
+id = "unannounced-projects"
+title = "Unannounced projects and sites"
+action = "local"
+criterion = "The text describes an unannounced project, site, land purchase or acquisition, with its capacity, location or timeline."
+message = "This looks like information about an unannounced project or site."
+watchlist = ["Project Kestrel", "Project Wren", "Project Heron"]
+
+[[policies]]
+id = "market-sensitive"
+title = "Trading and market-sensitive information"
+action = "local"
+criterion = "The text reveals trading positions, planned bids or offers, trading strategy or non-public forecasts."
+message = "This looks like trading or market-sensitive information."
